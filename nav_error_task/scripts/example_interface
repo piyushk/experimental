@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+from geometry_msgs.msg import Pose, Quaternion
+from nav_error_task.srv import NavError, NavErrorRequest
+import rospy
+import tf.transformations
+
+def NavErrorTaskInterface():
+
+    def __init__(self):
+        self.nav_error_task = rospy.ServiceProxy('nav_error_task', NavError)
+
+    def start(self):
+
+        # TODO: Change iteration stratgy. You should be able to call the contents of the loop as many times as you
+        # want.
+        request_count = 0
+        while request_count < 1:
+            nav_error_request = NavErrorRequest()
+
+            # TODO: Determine parameters here!
+
+            # Set a parameter negative to use default value.
+            # Default values can be read in the file: nav_error_task/launch/navigation.launch
+            nav_error_request.min_particles = -1
+            nav_error_request.max_particles = -1
+            nav_error_request.kld_err = -1
+            nav_error_request.kld_z = -1
+            nav_error_request.update_min_d = -1
+            nav_error_request.update_min_a = -1
+            nav_error_request.resample_interval = -1
+            nav_error_request.recovery_alpha_slow = -1
+            nav_error_request.recovery_alpha_fast = -1
+
+            # Set timeout_per_task to 0 for no timeout.
+            nav_error_request.timeout_per_task = 30.0
+
+            # TODO: If necessary, change the list of points here.
+            # Set the list of tasks
+            # tasks is a list of points of the form [x, y, theta], where x, y are in meters, and theta is in radians.
+            tasks = [
+                [0, 8, 0],
+                [33.5, 8, 1.57],
+                [33.5, 15.4, 3.14],
+                [0, 15.4, -1.57]
+            ]
+
+            for task in tasks:
+                pose = Pose()
+                pose.position.x = task[0]
+                pose.position.x = task[1]
+                q = tf.transformations.quaternion_from_euler(0, 0, task[2])
+                pose.orientation = Quaternion(*q)
+                nav_error_request.tasks.append(pose)
+
+            # Send this list of tasks to the server
+            rospy.loginfo("Sending task list to server...")
+            nav_error_response = self.nav_error_task(nav_error_request)
+
+            # To see the format for nav_error_response, see nav_error_task/srv/NavError.srv
+            for i in range(len(nav_error_response.success)):
+                if nav_error_response.success[i]:
+                    rospy.loginfo("  Task %i completed " +
+                                  "successfully with distance error %f" % (i, nav_error_response.error[i]))
+
+            # TODO: Process results here!
+
+            request_count += 1
+
+if __name__ == "__main__":
+    interface = NavErrorTaskInterface()
+    interface.start()

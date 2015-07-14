@@ -1,0 +1,20 @@
+#amcl parameters - http://wiki.ros.org/amcl
+
+int32 min_particles
+int32 max_particles
+float64 kld_err
+float64 kld_z
+float64 update_min_d
+float64 update_min_a
+int32 resample_interval
+float64 recovery_alpha_slow
+float64 recovery_alpha_fast
+
+float32 timeout_per_task
+
+geometry_msgs/Pose[] tasks
+
+---
+
+bool[] success
+float[] error

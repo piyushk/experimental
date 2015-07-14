@@ -1,0 +1,99 @@
+#!/usr/bin/env python
+
+import actionlib
+from actionlib_msgs.msg import GoalStatus
+import bwi_tools
+import move_base_msgs.msg
+from nav_error_task.srv import NavError, NavErrorResponse, NavErrorRequest
+import rospy
+
+def add_two_ints_server():
+    rospy.spin()
+
+class NavErrorTaskManager():
+
+    def __init__(self):
+        rospy.init_node('nav_error_task')
+        self.in_simulation = rospy.get_param('/use_sim_time', False)
+        self.assume_start_pos_correct = rospy.get_param('~assume_start_pos_correct', False)
+        self.global_frame_id = rospy.get_param('~global_frame_id', 'map')
+        self.service_server = rospy.Service('nav_error_task', NavError, self.handle_nav_error_task_request)
+
+    def handle_nav_error_task_request(self, req):
+        amcl_params = {}
+
+        if req.min_particles >= 0:
+            amcl_params['min_particles'] = req.min_particles
+        if req.max_particles >= 0:
+            amcl_params['max_particles'] = req.max_particles
+        if req.kld_err >= 0:
+            amcl_params['kld_err'] = req.kld_err
+        if req.kld_z >= 0:
+            amcl_params['kld_z'] = req.kld_z
+        if req.update_min_d >= 0:
+            amcl_params['update_min_d'] = req.update_min_d
+        if req.update_min_a >= 0:
+            amcl_params['update_min_a'] = req.update_min_a
+        if req.resample_interval >= 0:
+            amcl_params['resample_interval'] = req.resample_interval
+        if req.recovery_alpha_slow >= 0:
+            amcl_params['recovery_alpha_slow'] = req.recovery_alpha_slow
+        if req.recovery_alpha_fast >= 0:
+            amcl_params['recovery_alpha_fast'] = req.recovery_alpha_fast
+
+        if self.in_simulation:
+            # TODO: Get robot's position from gazebo and instantiate position of the robot based on that information.
+            pass
+
+        process = bwi_tools.start_roslaunch_process('nav_error_task', 'navigation.launch', amcl_params)
+
+        # Wait for navigation server to become available
+        client = actionlib.SimpleActionClient('move_base', move_base_msgs.msg.MoveBaseAction)
+        rospy.loginfo("Waiting for navigation server to become available...");
+        client.wait_for_server()
+
+        if self.in_simulation:
+            rospy.loginfo("Navigation server found! Waiting 5 seconds before issuing first task...");
+        else:
+            # TODO use the GUI to inform the user to set the robot's position in rviz.
+            # TODO: check with Xin if that's an acceptable st
+            pass
+
+        response = NavErrorResponse()
+        for task in req.tasks:
+            goal = NavErrorRequest()
+            goal.target_pose.pose = task
+            goal.target_pose.header.frame_id = self.global_frame_id
+
+            # Send goal and wait for result.
+            client.send_goal(goal)
+
+            finished_within_time = client.wait_for_result(timeout=rospy.Duration(secs=req.timeout_per_task))
+
+            success = False
+            error = 0.0
+            if finished_within_time:
+                if client.get_state() == GoalStatus.SUCCEEDED:
+                    success = True
+
+            rospy.loginfo("Trial success: " + str(success))
+            # If the task was successful, figure out what the error in position was.
+            if success:
+                # TODO
+                # if self.in_simulation:
+                #     # Auto-compute error.
+                #     pass
+                # else:
+                rospy.loginfo("  Trial Error: " + str(error))
+
+            response.success.append(success)
+            response.error.append(error)
+
+        return response
+
+    def start(self):
+        rospy.spin()
+
+if __name__ == "__main__":
+    manager = NavErrorTaskManager()
+    manager.start()
