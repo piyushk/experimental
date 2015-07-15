@@ -2,10 +2,15 @@
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
+from bwi_msgs.msg import QuestionDialog, QuestionDialogRequest
 import bwi_tools
+from gazebo_msgs.msg import GetModelState, GetModelStateRequest
+import math
 import move_base_msgs.msg
 from nav_error_task.srv import NavError, NavErrorResponse, NavErrorRequest
 import rospy
+import sys
+import tf.transformations
 
 def add_two_ints_server():
     rospy.spin()
@@ -17,6 +22,18 @@ class NavErrorTaskManager():
         self.in_simulation = rospy.get_param('/use_sim_time', False)
         self.assume_start_pos_correct = rospy.get_param('~assume_start_pos_correct', False)
         self.global_frame_id = rospy.get_param('~global_frame_id', 'map')
+        self.gazebo_model_name = rospy.get_param('~gazebo_model_name', 'segbot')
+        if self.in_simulation:
+            rospy.loginfo("NavErrorTaskManager: Running in simulation, waiting for gazebo get_model_state proxy...")
+            self.get_model_state = rospy.ServiceProxy('gazebo/get_model_state', GetModelState)
+            rospy.wait_for_service(self.get_model_state)
+            rospy.loginfo("NavErrorTaskManager: gazebo get_model_state proxy found.")
+        else:
+            rospy.loginfo("NavErrorTaskManager: Not running in simulation, waiting for segbot_gui...")
+            self.gui_request = rospy.ServiceProxy('question_dialog', QuestionDialog)
+            rospy.wait_for_service(self.gui_request)
+            rospy.loginfo("NavErrorTaskManager: Gui found.")
+
         self.service_server = rospy.Service('nav_error_task', NavError, self.handle_nav_error_task_request)
 
     def handle_nav_error_task_request(self, req):
@@ -42,21 +59,39 @@ class NavErrorTaskManager():
             amcl_params['recovery_alpha_fast'] = req.recovery_alpha_fast
 
         if self.in_simulation:
-            # TODO: Get robot's position from gazebo and instantiate position of the robot based on that information.
-            pass
+            model_state_request = GetModelStateRequest()
+            model_state_request.model_name = self.gazebo_model_name
+            model_state_response = self.get_model_state(model_state_request)
+            if not model_state_response.true:
+                rospy.logfatal("NavErrorTaskManager: Running in simulation, but unable to get pose of model '" +
+                               self.gazebo_model_name +
+                               "' from gazebo. Did you set the ~gazebo_model_name param correctly?")
+                sys.exit(-1)
+            amcl_params['initial_pose_x'] = model_state_response.pose.position.x
+            amcl_params['initial_pose_y'] = model_state_response.pose.position.y
+            model_angles = tf.transformations.euler_from_quaternion(model_state_response.pose.orientation.x,
+                                                                    model_state_response.pose.orientation.y,
+                                                                    model_state_response.pose.orientation.z,
+                                                                    model_state_response.pose.orientation.w)
+            amcl_params['initial_pose_a'] = model_angles[2]
+
 
         process = bwi_tools.start_roslaunch_process('nav_error_task', 'navigation.launch', amcl_params)
 
         # Wait for navigation server to become available
         client = actionlib.SimpleActionClient('move_base', move_base_msgs.msg.MoveBaseAction)
-        rospy.loginfo("Waiting for navigation server to become available...");
+        rospy.loginfo("NavErrorTaskManager: Waiting for navigation server to become available...");
         client.wait_for_server()
 
         if self.in_simulation:
-            rospy.loginfo("Navigation server found! Waiting 5 seconds before issuing first task...");
-        else:
-            # TODO use the GUI to inform the user to set the robot's position in rviz.
-            # TODO: check with Xin if that's an acceptable st
+            rospy.loginfo("NavErrorTaskManager: Navigation server found! Waiting 5 seconds before issuing task...");
+        elif not self.assume_start_pos_correct:
+            dialog_request = QuestionDialogRequest()
+            dialog_request.type = QuestionDialogRequest.CHOICE_QUESTION
+            dialog_request.message = "Please mark the starting location of the robot in rviz and hit 'Done!'"
+            dialog_request.options.append('Done!')
+            dialog_request.timeout = QuestionDialogRequest.NO_TIMEOUT
+            self.gui_request(dialog_request)
             pass
 
         response = NavErrorResponse()
@@ -79,11 +114,30 @@ class NavErrorTaskManager():
             rospy.loginfo("Trial success: " + str(success))
             # If the task was successful, figure out what the error in position was.
             if success:
-                # TODO
-                # if self.in_simulation:
-                #     # Auto-compute error.
-                #     pass
-                # else:
+                if self.in_simulation:
+                    model_state_request = GetModelStateRequest()
+                    model_state_request.model_name = self.gazebo_model_name
+                    model_state_response = self.get_model_state(model_state_request)
+                    target_x = task.position.x
+                    target_y = task.position.y
+                    actual_x = model_state_response.pose.position.x
+                    actual_y = model_state_response.pose.position.y
+                    error = math.sqrt((target_x - actual_x) * (target_x - actual_x) +
+                                      (target_y - actual_y) * (target_y - actual_y))
+                else:
+                    message = "Trial completed! Please enter error from true position:"
+                    while True:
+                        dialog_request = QuestionDialogRequest()
+                        dialog_request.type = QuestionDialogRequest.TEXT_QUESTION
+                        dialog_request.message = message
+                        dialog_request.timeout = QuestionDialogRequest.NO_TIMEOUT
+                        dialog_response = self.gui_request(dialog_request)
+                        try:
+                            error = float(dialog_response.text)
+                            break
+                        except ValueError:
+                            message = "Please enter floating point value only! Please enter error from true position:"
+
                 rospy.loginfo("  Trial Error: " + str(error))
 
             response.success.append(success)
