@@ -8,7 +8,6 @@ import tf.transformations
 class NavErrorTaskInterface():
 
     def __init__(self):
-        print "hello"
         self.nav_error_task = rospy.ServiceProxy('nav_error_task', NavError)
 
     def start(self):
@@ -34,7 +33,7 @@ class NavErrorTaskInterface():
             nav_error_request.recovery_alpha_fast = -1
 
             # Set timeout_per_task to 0 for no timeout.
-            nav_error_request.timeout_per_task = 30.0
+            nav_error_request.timeout_per_task = 0.0
 
             # TODO: If necessary, change the list of points here.
             # Set the list of tasks
@@ -49,7 +48,7 @@ class NavErrorTaskInterface():
             for task in tasks:
                 pose = Pose()
                 pose.position.x = task[0]
-                pose.position.x = task[1]
+                pose.position.y = task[1]
                 q = tf.transformations.quaternion_from_euler(0, 0, task[2])
                 pose.orientation = Quaternion(*q)
                 nav_error_request.tasks.append(pose)
@@ -61,8 +60,8 @@ class NavErrorTaskInterface():
             # To see the format for nav_error_response, see nav_error_task/srv/NavError.srv
             for i in range(len(nav_error_response.success)):
                 if nav_error_response.success[i]:
-                    rospy.loginfo("  Task %i completed " +
-                                  "successfully with distance error %f" % (i, nav_error_response.error[i]))
+                    rospy.loginfo("  Task " + str(i) + " completed " + "successfully with distance error " +
+                                  str(nav_error_response.error[i]))
 
             # TODO: Process results here!
 

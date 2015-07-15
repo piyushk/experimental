@@ -5,9 +5,14 @@
 
   <include file="$(find segbot_gazebo)/launch/segbot_mobile_base.launch">
     <arg name="y" value="10.0" />
+    <arg name="use_full_gazebo_model" value="false" />
   </include>
 
-  <node name="nav_error_task" pkg="nav_error_task" type="nav_error_task" />
+  <include file="$(find segbot_navigation)/launch/rviz.launch" />
+
+  <node name="nav_error_task" pkg="nav_error_task" type="nav_error_task">
+    <!-- <remap from="move_base" to="move_base_interruptable" /> -->
+  </node>
 
 </launch>
 
