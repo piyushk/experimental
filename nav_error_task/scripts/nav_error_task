@@ -2,9 +2,9 @@
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
-from bwi_msgs.msg import QuestionDialog, QuestionDialogRequest
+from bwi_msgs.srv import QuestionDialog, QuestionDialogRequest
 import bwi_tools
-from gazebo_msgs.msg import GetModelState, GetModelStateRequest
+from gazebo_msgs.srv import GetModelState, GetModelStateRequest
 import math
 import move_base_msgs.msg
 from nav_error_task.srv import NavError, NavErrorResponse, NavErrorRequest

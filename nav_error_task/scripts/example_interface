@@ -5,9 +5,10 @@ from nav_error_task.srv import NavError, NavErrorRequest
 import rospy
 import tf.transformations
 
-def NavErrorTaskInterface():
+class NavErrorTaskInterface():
 
     def __init__(self):
+        print "hello"
         self.nav_error_task = rospy.ServiceProxy('nav_error_task', NavError)
 
     def start(self):

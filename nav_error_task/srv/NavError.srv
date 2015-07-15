@@ -17,4 +17,4 @@ geometry_msgs/Pose[] tasks
 ---
 
 bool[] success
-float[] error
+float32[] error
